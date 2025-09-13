@@ -299,7 +299,7 @@ export const ProductListScreen: React.FC = () => {
         <FlatList
           data={filteredProducts}
           renderItem={renderProduct}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={(item, index) => `product-${item.id}-${index}-${item.title.slice(0, 10)}`}
           numColumns={2}
           contentContainerStyle={styles.listContainer}
           refreshControl={

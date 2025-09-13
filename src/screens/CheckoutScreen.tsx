@@ -1,6 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useState } from 'react';
+import { Formik } from 'formik';
+import React, { useCallback, useState } from 'react';
 import {
   Alert,
   ScrollView,
@@ -17,46 +18,41 @@ import {
   TextInput,
 } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Yup from 'yup';
 import { useCart } from '../contexts/CartContext';
 import { CheckoutForm, RootStackParamList } from '../types';
 
 type CheckoutScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Checkout'>;
+
+// Validation schema
+const validationSchema = Yup.object().shape({
+  name: Yup.string()
+    .min(2, 'Name must be at least 2 characters')
+    .max(50, 'Name must be less than 50 characters')
+    .required('Name is required'),
+  address: Yup.string()
+    .min(10, 'Address must be at least 10 characters')
+    .max(200, 'Address must be less than 200 characters')
+    .required('Address is required'),
+  paymentMethod: Yup.string()
+    .oneOf(['credit', 'debit', 'paypal', 'cash'], 'Invalid payment method')
+    .required('Payment method is required'),
+});
 
 export const CheckoutScreen: React.FC = () => {
   const navigation = useNavigation<CheckoutScreenNavigationProp>();
   const { cartItems, getTotalPrice, clearCart } = useCart();
   const insets = useSafeAreaInsets();
 
-  const [formData, setFormData] = useState<CheckoutForm>({
+  const [loading, setLoading] = useState(false);
+
+  const initialValues: CheckoutForm = {
     name: '',
     address: '',
     paymentMethod: 'credit',
-  });
-  const [loading, setLoading] = useState(false);
-
-  const handleInputChange = (field: keyof CheckoutForm, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handlePaymentMethodChange = (method: CheckoutForm['paymentMethod']) => {
-    setFormData(prev => ({ ...prev, paymentMethod: method }));
-  };
-
-  const validateForm = (): boolean => {
-    if (!formData.name.trim()) {
-      Alert.alert('Validation Error', 'Please enter your name');
-      return false;
-    }
-    if (!formData.address.trim()) {
-      Alert.alert('Validation Error', 'Please enter your address');
-      return false;
-    }
-    return true;
-  };
-
-  const handlePlaceOrder = async () => {
-    if (!validateForm()) return;
-
+  const handlePlaceOrder = useCallback(async (values: CheckoutForm) => {
     setLoading(true);
 
     // Simulate API call
@@ -64,7 +60,7 @@ export const CheckoutScreen: React.FC = () => {
       setLoading(false);
       Alert.alert(
         'Order Placed!',
-        `Thank you for your order, ${formData.name}! Your order total is $${getTotalPrice().toFixed(2)}.`,
+        `Thank you for placing your order! Your order total is $${getTotalPrice().toFixed(2)}. and will be delivered to ${values.address}`,
         [
           {
             text: 'OK',
@@ -76,9 +72,9 @@ export const CheckoutScreen: React.FC = () => {
         ]
       );
     }, 2000);
-  };
+  }, [getTotalPrice, clearCart, navigation]);
 
-  const renderCartSummary = () => (
+  const renderCartSummary = useCallback(() => (
     <Card style={styles.summaryCard}>
       <Card.Content>
         <Text variant="titleLarge" style={styles.summaryTitle}>
@@ -106,108 +102,132 @@ export const CheckoutScreen: React.FC = () => {
         </View>
       </Card.Content>
     </Card>
-  );
+  ), [cartItems, getTotalPrice]);
+
+  const handleGoBack = useCallback(() => {
+    navigation.goBack();
+  }, [navigation]);
 
   return (
-    <ScrollView style={[styles.container, { paddingBottom: insets.bottom }]}>
-      <Text variant="headlineSmall" style={styles.title}>
-        Checkout
-      </Text>
-
-      {renderCartSummary()}
-
-      <Card style={styles.formCard}>
-        <Card.Content>
-          <Text variant="titleLarge" style={styles.sectionTitle}>
-            Shipping Information
+    <Formik
+      initialValues={initialValues}
+      validationSchema={validationSchema}
+      onSubmit={handlePlaceOrder}
+    >
+      {({ values, errors, touched, handleChange, handleBlur, setFieldValue, handleSubmit, isValid }) => (
+        <ScrollView style={[styles.container, { paddingBottom: insets.bottom }]}>
+          <Text variant="headlineSmall" style={styles.title}>
+            Checkout
           </Text>
 
-          <TextInput
-            label="Full Name"
-            value={formData.name}
-            onChangeText={(text) => handleInputChange('name', text)}
-            style={styles.input}
-            mode="outlined"
-          />
+          {renderCartSummary()}
 
-          <TextInput
-            label="Address"
-            value={formData.address}
-            onChangeText={(text) => handleInputChange('address', text)}
-            style={styles.input}
-            mode="outlined"
-            multiline
-            numberOfLines={3}
-          />
-        </Card.Content>
-      </Card>
+          <Card style={styles.formCard}>
+            <Card.Content>
+              <Text variant="titleLarge" style={styles.sectionTitle}>
+                Shipping Information
+              </Text>
 
-      <Card style={styles.formCard}>
-        <Card.Content>
-          <Text variant="titleLarge" style={styles.sectionTitle}>
-            Payment Method
-          </Text>
+              <TextInput
+                label="Full Name"
+                value={values.name}
+                onChangeText={handleChange('name')}
+                onBlur={handleBlur('name')}
+                style={styles.input}
+                mode="outlined"
+                error={touched.name && !!errors.name}
+              />
+              {touched.name && errors.name && (
+                <Text style={styles.errorText}>{errors.name}</Text>
+              )}
 
-          <RadioButton.Group
-            onValueChange={handlePaymentMethodChange}
-            value={formData.paymentMethod}
-          >
-            <List.Item
-              title="Credit Card"
-              description="Pay with your credit card"
-              left={(props) => <List.Icon {...props} icon="credit-card" />}
-              right={(props) => (
-                <RadioButton {...props} value="credit" />
+              <TextInput
+                label="Address"
+                value={values.address}
+                onChangeText={handleChange('address')}
+                onBlur={handleBlur('address')}
+                style={styles.input}
+                mode="outlined"
+                multiline
+                numberOfLines={3}
+                error={touched.address && !!errors.address}
+              />
+              {touched.address && errors.address && (
+                <Text style={styles.errorText}>{errors.address}</Text>
               )}
-            />
-            <List.Item
-              title="Debit Card"
-              description="Pay with your debit card"
-              left={(props) => <List.Icon {...props} icon="card" />}
-              right={(props) => (
-                <RadioButton {...props} value="debit" />
-              )}
-            />
-            <List.Item
-              title="PayPal"
-              description="Pay with PayPal"
-              left={(props) => <List.Icon {...props} icon="credit-card" />}
-              right={(props) => (
-                <RadioButton {...props} value="paypal" />
-              )}
-            />
-            <List.Item
-              title="Cash on Delivery"
-              description="Pay when you receive the order"
-              left={(props) => <List.Icon {...props} icon="cash" />}
-              right={(props) => (
-                <RadioButton {...props} value="cash" />
-              )}
-            />
-          </RadioButton.Group>
-        </Card.Content>
-      </Card>
+            </Card.Content>
+          </Card>
 
-      <View style={[styles.buttonContainer, { paddingBottom: insets.bottom + 16 }]}>
-        <Button
-          mode="outlined"
-          onPress={() => navigation.goBack()}
-          style={styles.button}
-        >
-          Back to Cart
-        </Button>
-        <Button
-          mode="contained"
-          onPress={handlePlaceOrder}
-          style={styles.button}
-          loading={loading}
-          disabled={loading}
-          icon="check"
-        >
-          Place Order
-        </Button>
-      </View>
-    </ScrollView>
+          <Card style={styles.formCard}>
+            <Card.Content>
+              <Text variant="titleLarge" style={styles.sectionTitle}>
+                Payment Method
+              </Text>
+
+              <RadioButton.Group
+                onValueChange={(value) => setFieldValue('paymentMethod', value)}
+                value={values.paymentMethod}
+              >
+                <List.Item
+                  title="Credit Card"
+                  description="Pay with your credit card"
+                  left={(props) => <List.Icon {...props} icon="credit-card" />}
+                  right={(props) => (
+                    <RadioButton {...props} value="credit" />
+                  )}
+                />
+                <List.Item
+                  title="Debit Card"
+                  description="Pay with your debit card"
+                  left={(props) => <List.Icon {...props} icon="card" />}
+                  right={(props) => (
+                    <RadioButton {...props} value="debit" />
+                  )}
+                />
+                <List.Item
+                  title="PayPal"
+                  description="Pay with PayPal"
+                  left={(props) => <List.Icon {...props} icon="credit-card" />}
+                  right={(props) => (
+                    <RadioButton {...props} value="paypal" />
+                  )}
+                />
+                <List.Item
+                  title="Cash on Delivery"
+                  description="Pay when you receive the order"
+                  left={(props) => <List.Icon {...props} icon="cash" />}
+                  right={(props) => (
+                    <RadioButton {...props} value="cash" />
+                  )}
+                />
+              </RadioButton.Group>
+              {touched.paymentMethod && errors.paymentMethod && (
+                <Text style={styles.errorText}>{errors.paymentMethod}</Text>
+              )}
+            </Card.Content>
+          </Card>
+
+          <View style={[styles.buttonContainer, { paddingBottom: insets.bottom + 16 }]}>
+            <Button
+              mode="outlined"
+              onPress={handleGoBack}
+              style={styles.button}
+            >
+              Back to Cart
+            </Button>
+            <Button
+              mode="contained"
+              onPress={() => handleSubmit()}
+              style={styles.button}
+              loading={loading}
+              icon="check"
+            >
+              Place Order
+            </Button>
+          </View>
+        </ScrollView>
+      )}
+    </Formik>
   );
 };
 
@@ -279,5 +299,13 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
+  },
+  errorText: {
+    color: '#D32F2F',
+    fontSize: 12,
+    marginTop: -8,
+    marginBottom: 8,
+    marginLeft: 12,
+    fontFamily: 'Inter_400Regular',
   },
 });

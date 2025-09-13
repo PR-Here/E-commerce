@@ -1,9 +1,8 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Alert,
-  Image,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -17,6 +16,7 @@ import {
   Text,
 } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ImageCarousel } from '../components/ImageCarousel';
 import { useCart } from '../contexts/CartContext';
 import { RootStackParamList } from '../types';
 
@@ -32,7 +32,20 @@ export const ProductDetailScreen: React.FC = () => {
 
   const [quantity, setQuantity] = useState(1);
 
-  const handleAddToCart = () => {
+  // Generate multiple images for carousel (simulating different angles/views)
+  const getProductImages = useCallback(() => {
+    const baseImage = product.image;
+    // For demo purposes, we'll create variations of the same image
+    // In a real app, you'd have multiple actual product images
+    return [
+      baseImage,
+      baseImage.replace('https://fakestoreapi.com/img/', 'https://picsum.photos/400/400?random='),
+      baseImage.replace('https://fakestoreapi.com/img/', 'https://picsum.photos/400/400?random='),
+      baseImage.replace('https://fakestoreapi.com/img/', 'https://picsum.photos/400/400?random='),
+    ];
+  }, [product.image]);
+
+  const handleAddToCart = useCallback(() => {
     addToCart(product, quantity);
     Alert.alert('Success', 'Product added to cart!', [
       {
@@ -41,22 +54,21 @@ export const ProductDetailScreen: React.FC = () => {
       },
     ]);
     setQuantity(1);
-  };
+  }, [addToCart, product, quantity, navigation]);
 
-
-  const handleIncreaseQuantity = () => {
+  const handleIncreaseQuantity = useCallback(() => {
     if (quantity < 99) {
       setQuantity(quantity + 1);
     }
-  };
+  }, [quantity]);
 
-  const handleDecreaseQuantity = () => {
+  const handleDecreaseQuantity = useCallback(() => {
     if (quantity > 1) {
       setQuantity(quantity - 1);
     }
-  };
+  }, [quantity]);
 
-  const renderStars = (rating: number) => {
+  const renderStars = useCallback((rating: number) => {
     const stars = [];
     const fullStars = Math.floor(rating);
     const hasHalfStar = rating % 1 !== 0;
@@ -73,7 +85,7 @@ export const ProductDetailScreen: React.FC = () => {
     }
 
     return stars.join('');
-  };
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -82,10 +94,10 @@ export const ProductDetailScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.imageContainer}>
-          <Image resizeMode="cover" source={{ uri: product.image }} style={styles.image} />
-          <View style={styles.imageOverlay} />
-        </View>
+        <ImageCarousel
+          images={getProductImages()}
+          height={350}
+        />
 
         <Card style={styles.card}>
           <Card.Content style={styles.cardContent}>
@@ -205,24 +217,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 120, // Space for fixed button
-  },
-  imageContainer: {
-    position: 'relative',
-    height: 350,
-    overflow: 'hidden',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  imageOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 60,
-    background: 'linear-gradient(transparent, rgba(0,0,0,0.1))',
   },
   card: {
     margin: 20,
